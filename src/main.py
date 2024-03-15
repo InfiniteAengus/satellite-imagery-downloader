@@ -2,6 +2,7 @@ import os
 import json
 import re
 import cv2
+import requests
 from datetime import datetime
 
 from image_downloading import download_image
@@ -9,21 +10,19 @@ from image_downloading import download_image
 file_dir = os.path.dirname(__file__)
 prefs_path = os.path.join(file_dir, 'preferences.json')
 default_prefs = {
-        'url': 'https://mt.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+        'url': 'https://tile.googleapis.com/v1/2dtiles/{z}/{x}/{y}',
+        'session_url': 'https://tile.googleapis.com/v1/createSession',
+        'api_key': '',
         'tile_size': 256,
         'channels': 3,
         'dir': os.path.join(file_dir, 'images'),
         'headers': {
-            'cache-control': 'max-age=0',
-            'sec-ch-ua': '" Not A;Brand";v="99", "Chromium";v="99", "Google Chrome";v="99"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"',
-            'sec-fetch-dest': 'document',
-            'sec-fetch-mode': 'navigate',
-            'sec-fetch-site': 'none',
-            'sec-fetch-user': '?1',
-            'upgrade-insecure-requests': '1',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.82 Safari/537.36'
+            "Content-Type": "application/json"
+        },
+        'payload': {
+            'mapType': 'satellite',
+            'language': 'en-US',
+            'region': 'US'
         },
         'tl': '',
         'br': '',
@@ -43,6 +42,15 @@ def take_input(messages):
         inputs.append(inp)
     return inputs
 
+def get_sessionId(url, payload, headers, key):
+    response = requests.post(url, json=payload, headers=headers, params={"key": key})
+
+    if response.status_code == 200:
+        session_id = response.json()["session"]
+        print("Session ID:", session_id)
+        return session_id
+    else:
+        print("Failed to create session. Status code:", response.status_code)
 
 def run():
     with open(os.path.join(file_dir, 'preferences.json'), 'r', encoding='utf-8') as f:
@@ -70,8 +78,15 @@ def run():
     lat2 = float(lat2)
     lon2 = float(lon2)
 
+    session_id = get_sessionId(prefs['session_url'], prefs['payload'], prefs['headers'], prefs['api_key'])
+
+    params = {
+        'key': prefs['api_key'],
+        'session': session_id
+    }
+
     img = download_image(lat1, lon1, lat2, lon2, zoom, prefs['url'],
-        prefs['headers'], tile_size, channels)
+        params, tile_size, channels)
 
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     name = f'img_{timestamp}.png'
